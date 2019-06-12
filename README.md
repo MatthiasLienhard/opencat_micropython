@@ -3,6 +3,9 @@ micropython implementation for esp32 of the opencat
 
 I used Ez 3D Printed OpenCat from thingiverse: https://www.thingiverse.com/thing:3384371
 
+Here you see the first steps it made: https://www.youtube.com/watch?v=MNgKbt5TRXs
+
+
 This project is in a very early state. I did not look at the original opencat firmware, so pinout is probably different.
 Servo ids: FLS, FLK, BLS, BLK, FRS, FRK, BRS, BRK, T, HY, HP
 - F: front leg
