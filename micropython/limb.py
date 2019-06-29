@@ -21,11 +21,11 @@ except ModuleNotFoundError: #make it compatible to python3
 def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=None):
     limb_names=['leg_front_left', 'leg_back_left', 'leg_front_right', 'leg_back_right', 'tail', 'head']
     if init_theta is None:
-        init_theta=[[170,-140],[170,-140],[170,-140],[170,-140],[10],[-40,0]] #sleeping_cat
+        init_theta=[[160,-130],[20,130],[160,-130],[20,130],[10],[-40,0]] #sleeping_cat
     if invert is None:
         invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,0]]
     if offset is None:
-        offset=[[-15,150],[-15,140],[-15,150],[-15,150],[80],[110,80]] #EMPIRICAL    
+        offset=[[5,130],[5,50],[5,150],[5,40],[80],[110,80]] #EMPIRICAL    
     if kinematics is None:
         kinematics=[K(invert_th2=i) for i in [False, True, False, True]]+[None, None]
     servos=Servos(i2c) 

@@ -8,14 +8,7 @@ from tkinter import ttk
 import math
 from micropython.limb import Limb
 from collections import deque
-try:
-    from time import ticks_ms, ticks_diff
-except ImportError:
-    from time import time_ns
-    def ticks_ms():
-        return time_ns() // 1000000 
-    def ticks_diff(new,old):
-        return(new-old)
+
 
 DEBUG=True
 
@@ -153,6 +146,9 @@ class SimulationGUI:
         
         return True
 
+    def print_thetas(self):
+        for name,l in self.cat.limbs.items():
+            print('{}: {}'.format(name, l.get_theta()))
 
     def xy(self, event):
         x,y=event.x/self.scale, event.y/self.scale

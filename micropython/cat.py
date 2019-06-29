@@ -13,7 +13,7 @@ class Cat:
     def __init__(self, limbs, freq=25, timer=None):
         self.limbs=limbs        
         self._limb_names=[(l.get_servo_nr(), l.name) for l in self.limbs.values()]
-        self._limb_names.sort()
+        self._limb_names.sort()#sort by servo number to get defined order
         self.freq=25
         for nr, name in self._limb_names:
             print('{}: {}'.format(name, nr))
@@ -58,21 +58,7 @@ class Cat:
         terminated=[l.motion.terminated for l in self.limbs.values()]
         return not all(terminated)
     
-    def get_for_legs(self, value, what='all'):
-        if isinstance(value, dict):
-            return value
-        if not isinstance(what, list):
-            what=[what]
-        if not isinstance(value, list):
-            value=[value]*len(what)
-        if all(limb in self.limbs for limb in what):
-            return(dict(zip(what, value)))
-        d=dict()
-        for w,v in zip(what,value):
-            legs=self.leg_names(w)
-            d.update({l:v for l in legs})
-        return(d)
-
+    
     def leg_position(self, height=7,ground_pos=0, spread=0, pitch=0,roll=0):
         leg_names=self.leg_names()
         pos={l:[ground_pos, height] for l in leg_names}
@@ -112,7 +98,7 @@ class Cat:
                 step_size[l]+=direction #shorten left steps
             elif direction > 0 and 'right' in l:
                 step_size[l]-=direction #shorten right steps
-        phase={n:p/4 for n,p in zip(leg_position,[0,3,2,1])}
+        phase={n:p/4 for n,p in zip(self.leg_names(),[0,3,2,1])}
         now=ticks_ms()      
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size
@@ -143,7 +129,7 @@ class Cat:
                 step_size[l]+=direction #shorten left steps
             elif direction > 0 and 'right' in l:
                 step_size[l]-=direction #shorten right steps
-        phase={n:p for n,p in zip(leg_position,[0,.5,.5,0] ) }
+        phase={n:p for n,p in zip(self.leg_names(),[0,.5,.5,0] ) }#the order is important here!
         now=ticks_ms()         
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size

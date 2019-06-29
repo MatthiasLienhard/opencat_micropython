@@ -1,13 +1,6 @@
 import math
 import sys
-try:
-    from time import ticks_ms, ticks_diff
-except ImportError:
-    from time import time_ns
-    def ticks_ms():
-        return time_ns() // 1000000 
-    def ticks_diff(new,old):
-        return(new-old)
+
 
 
 #kinematics for a two link arm
