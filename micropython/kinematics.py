@@ -1,8 +1,18 @@
 import math
+import sys
+try:
+    from time import ticks_ms, ticks_diff
+except ImportError:
+    from time import time_ns
+    def ticks_ms():
+        return time_ns() // 1000000 
+    def ticks_diff(new,old):
+        return(new-old)
+
 
 #kinematics for a two link arm
 class TwoLinkArmKinematics:
-    def __init__(self,link_len=[4, 6], constrains=[None, None], invert_th2=False): 
+    def __init__(self,link_len=[4.5, 5], constrains=[None, None], invert_th2=False): 
         self.link_len=link_len
         self.constrains=constrains
         self.invert_th2= invert_th2
@@ -28,13 +38,13 @@ class TwoLinkArmKinematics:
             th2 = -1*th2
         k1 = l1 + l2*math.cos(th2)
         k2 = l2*math.sin(th2)
-        r  = (k1**2 + k2**2)**0.5
+        #r  = (k1**2 + k2**2)**0.5
         gamma = math.atan2(k2,k1)
         #calculate th1
         th1 = math.atan2(y,x) - gamma
         #TODO: check constrains
-        #try inverse
+        #if violated, try invert theta2
         if degrees:
             return math.degrees(th1), math.degrees(th2)
         return th1, th2
-        
+ 
