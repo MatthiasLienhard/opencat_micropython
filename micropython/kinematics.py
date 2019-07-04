@@ -5,7 +5,7 @@ import sys
 
 #kinematics for a two link arm
 class TwoLinkArmKinematics:
-    def __init__(self,link_len=[4.5, 5], constrains=[None, None], invert_th2=False): 
+    def __init__(self,link_len=[4, 5], constrains=[None, None], invert_th2=False): 
         self.link_len=link_len
         self.constrains=constrains
         self.invert_th2= invert_th2

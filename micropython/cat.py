@@ -26,7 +26,8 @@ class Cat:
                 timer.deinit()
                 sleep(1)
                 timer.init(freq=self.freq, mode=Timer.PERIODIC, callback=self._update)
-
+    
+    @property
     def leg_names(self,which='all'):
         if which=='all':
             which=''
@@ -60,7 +61,7 @@ class Cat:
     
     
     def leg_position(self, height=7,ground_pos=0, spread=0, pitch=0,roll=0):
-        leg_names=self.leg_names()
+        leg_names=self.leg_names
         pos={l:[ground_pos, height] for l in leg_names}
         if spread != 0:
             for l in leg_names:
@@ -98,7 +99,7 @@ class Cat:
                 step_size[l]+=direction #shorten left steps
             elif direction > 0 and 'right' in l:
                 step_size[l]-=direction #shorten right steps
-        phase={n:p/4 for n,p in zip(self.leg_names(),[0,3,2,1])}
+        phase={n:p/4 for n,p in zip(self.leg_names,[0,2,1,3])}
         now=ticks_ms()      
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size
@@ -129,7 +130,7 @@ class Cat:
                 step_size[l]+=direction #shorten left steps
             elif direction > 0 and 'right' in l:
                 step_size[l]-=direction #shorten right steps
-        phase={n:p for n,p in zip(self.leg_names(),[0,.5,.5,0] ) }#the order is important here!
+        phase={n:p for n,p in zip(self.leg_names,[0,.5,.5,0] ) }#the order is important here!
         now=ticks_ms()         
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size
@@ -146,6 +147,16 @@ class Cat:
                 iterations=n_steps,
                 transition_time=t*1000, 
                 start_time=now) 
+
+        self.limbs['head'].motion=MotionPlan(
+            limb=self.limbs['head'], 
+            steps=[[0,0],[10,40],[0,0],[10,-40]],
+            phase=0,
+            steps_duration= [t_ground//2]*4,
+            iterations=n_steps//2,
+            transition_time=t*1000, 
+            start_time=now) 
+        
 
 
     def set_head(self, pos=[0, 0], t=1):
@@ -177,6 +188,7 @@ class Cat:
     def sit(self,t=1):
         self.stand(height=6, pitch=4, ground_pos=-1)
         self.set_head([-20,0])
+        self.set_tail(-60)
         
     def sleep(self):
         self.stand(height=4,ground_pos=2, pitch=1, spread=3)

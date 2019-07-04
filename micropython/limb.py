@@ -25,7 +25,7 @@ def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=No
     if invert is None:
         invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,0]]
     if offset is None:
-        offset=[[5,130],[5,50],[5,150],[5,40],[80],[110,80]] #EMPIRICAL    
+        offset=[[14, 130],[ 11.5, 47], [14, 150], [13, 34],[80],[110,80]] #EMPIRICAL    
     if kinematics is None:
         kinematics=[K(invert_th2=i) for i in [False, True, False, True]]+[None, None]
     servos=Servos(i2c) 
@@ -50,6 +50,9 @@ class Limb:
         if pos is not None:
             return self.kinematics.inverse(pos, degrees=True)
         return [j.theta for j in self.joints]
+
+    def calibrate(self,joint_nr=0,delta_theta=5 ):
+        self.joints[joint_nr].offset+=delta_theta
 
 
     def get_position(self, theta=None):
