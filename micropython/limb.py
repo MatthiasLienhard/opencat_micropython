@@ -124,7 +124,7 @@ class MotionPlan:
             steps=[self.init]
         if start_time is None:
             start_time= ticks_ms()
-        
+        #print(steps_duration)
         self.steps=steps
         if steps_duration is None:
             steps_duration=[]
@@ -165,7 +165,7 @@ class MotionPlan:
         t-=prev
         #get weighted mean
         progress=t/step
-        return self.mean(self.steps[i],self.steps[(i+1)%self.n_steps],progress)
+        return self.mean(self.steps[i],self.steps[(i+1)%len(self.steps)],progress)
 
     def get_theta(self, t=None):
         if self.terminated:
@@ -181,8 +181,9 @@ class MotionPlan:
             else:
                 current_pos=self.init
         elif self.n_steps>0: #not just one position
+            t-=self.transition_time
             i=t//self.iter_duration
-            if i<self.iterations:
+            if i<=self.iterations:
                 current_pos=self._get_pos_within_iteration(t+self.phase)
             else:
                 self.terminated=True

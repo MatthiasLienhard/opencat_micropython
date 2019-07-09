@@ -20,12 +20,13 @@ class Cat:
 
         if timer is not None:
             self.timer= timer
+            period=1000//freq
             try:
-                timer.init(freq=self.freq, mode=Timer.PERIODIC, callback=self._update)
+                timer.init(period=period, mode=Timer.PERIODIC, callback=self._update)
             except OSError:
                 timer.deinit()
                 sleep(1)
-                timer.init(freq=self.freq, mode=Timer.PERIODIC, callback=self._update)
+                timer.init(period=period,mode=Timer.PERIODIC, callback=self._update)
     
     @property
     def leg_names(self,which='all'):
@@ -60,30 +61,60 @@ class Cat:
         return not all(terminated)
     
     
-    def leg_position(self, height=7,ground_pos=0, spread=0, pitch=0,roll=0):
+    def leg_position(self, **kwargs):
+        #make all arguments to lists of same length
+        arg_names=['height','ground_pos', 'spread', 'pitch','roll']
+        if any([a not in arg_names for a in kwargs]):
+            raise TypeError('Unexpected keyword argument')
+        for k in arg_names[1:]:
+            kwargs.setdefault(k,0)
+        kwargs.setdefault('height',7)
+        for n,v in kwargs.items():
+            if not isinstance(v,list):
+                kwargs[n]=[v]
+        maxlen=max([len(v) for v in kwargs.values()])    
+        for n,v in kwargs.items():
+            if len(v)<maxlen:
+                kwargs[n]=v+[v[-1]]*(maxlen-len(v))#repeat the last value
+
         leg_names=self.leg_names
-        pos={l:[ground_pos, height] for l in leg_names}
-        if spread != 0:
+        pos={l:[] for l in leg_names}
+        for height,ground_pos, spread, pitch,roll in zip(*[kwargs[n] for n in arg_names]):
             for l in leg_names:
-                pos[l][0]+= spread/2 if 'front' in l else -spread/2
-        if roll != 0:
-            for l in leg_names:
-                pos[l][1]+= roll/2 if 'left' in l else -roll/2
-        if pitch != 0:
-            for l in leg_names:
-                pos[l][1]+= pitch/2 if 'front' in l else -pitch/2
+                pos_i=[ground_pos,height]      
+                if spread != 0:                
+                    pos_i[0]+= spread/2 if 'front' in l else -spread/2
+                if roll != 0:                
+                    pos_i[1]+= roll/2 if 'left' in l else -roll/2
+                if pitch != 0:                
+                    pos_i[1]+= pitch/2 if 'front' in l else -pitch/2
+                pos[l].append(pos_i)
+        #print(pos)
         return(pos)
         
-    def stand(self,t=1, **kwargs):  
+    def stand(self,t=1, iterations=None, **kwargs):  
         leg_position=self.leg_position(**kwargs)
+        if not isinstance(t,list):
+            t=[t]
+        n_pos=len(next(iter(leg_position.values())))
+        if n_pos==1:
+            iterations=None
+        if iterations is not None:
+            n_pos+=1
+        if len(t)<n_pos:
+            t=t+[t[-1]]*(n_pos-len(t))
+        t=[t_s *1000 for t_s in t]
+        
         now=ticks_ms()      
         for leg,pos in leg_position.items():
             self.limbs[leg].motion=MotionPlan(
                     limb=self.limbs[leg], 
-                    steps=[pos],
+                    steps=pos,
                     position_mode=True,
-                    transition_time=t*1000, 
-                    start_time=now)
+                    transition_time=t[0], 
+                    steps_duration=t[1:],
+                    start_time=now, 
+                    iterations=iterations)
     
     def tripod_gait(self, n_steps=10, lift=1, step_size=8, direction=0, t=1, speed=6,**kwargs):  
         #tripod gait, three legs are on the ground
@@ -103,10 +134,10 @@ class Cat:
         now=ticks_ms()      
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size
-            steps=[ [ pos[0]+hss, pos[1] ], 
-                    [ pos[0]-hss, pos[1] ],
-                    [ pos[0]-hss, pos[1]-lift ],
-                    [ pos[0]+hss, pos[1]-lift ]]
+            steps=[ [ pos[0][0]+hss, pos[0][1] ], 
+                    [ pos[0][0]-hss, pos[0][1] ],
+                    [ pos[0][0]-hss, pos[0][1]-lift ],
+                    [ pos[0][0]+hss, pos[0][1]-lift ]]
             self.limbs[leg].motion=MotionPlan(
                 limb=self.limbs[leg], 
                 steps=steps,
@@ -117,10 +148,14 @@ class Cat:
                 transition_time=t*1000, 
                 start_time=now)
 
-    def walk(self, n_steps=10, lift=1, step_size=8, direction=0, t=1, speed=6,**kwargs):  
+    def walk(self, n_steps=10, lift=1, step_size=6, direction=0, t=1, speed=6,**kwargs):  
         #two opposit legs are on the ground
         #speed in cm/sec
+        kwargs.setdefault('ground_pos',2.5)
         leg_position=self.leg_position(**kwargs) #center position
+        reverse= (step_size<0 or speed <0)
+        step_size=abs(step_size)
+        speed=abs(speed)
         t_ground=step_size/speed/2*1000 
         t_air=step_size/(2*lift+step_size)
         step_size={l:step_size for l in leg_position}
@@ -134,10 +169,11 @@ class Cat:
         now=ticks_ms()         
         for leg,pos in leg_position.items():
             hss=step_size[leg]/2#half step size
-            steps=[ [ pos[0]+hss, pos[1] ], 
-                    [ pos[0]-hss, pos[1] ],
-                    [ pos[0]-hss, pos[1]-lift ],
-                    [ pos[0]+hss, pos[1]-lift ]]   
+            if reverse: hss*=-1
+            steps=[ [ pos[0][0]+hss, pos[0][1] ], 
+                    [ pos[0][0]-hss, pos[0][1] ],
+                    [ pos[0][0]-hss, pos[0][1]-lift ],
+                    [ pos[0][0]+hss, pos[0][1]-lift ]]   
             self.limbs[leg].motion=MotionPlan(
                 limb=self.limbs[leg], 
                 steps=steps,
@@ -212,4 +248,14 @@ class Cat:
                     transition_time=100) #time to reach center
 
 
- 
+    def sit2(self):
+        self.set_tail() 
+        self.set_head()
+        self.stand(1,ground_pos=1, height=7 ,pitch=-2, spread=-3)                                                                                         
+        sleep(1)
+        self.stand(.1,ground_pos=2.5, height=7.7 ,pitch=2.5, spread=-4) 
+        self.set_tail(-80,t=.1)                                                                                        
+        self.set_head([-50,0], t=.1) 
+    
+    def pushups(self, iterations=5, t=1):
+        self.stand(pitch=[-3,3], height=[5,7],iterations=iterations, t=t)
