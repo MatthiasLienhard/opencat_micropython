@@ -29,7 +29,8 @@ class SimulationLimb(Limb):
         self.kinematics=kinematics        
         self.servo_nr=servo_nr
         self.trace=deque(maxlen=20)
-        self.set_motion(LimbMotionPlan(self))  # set the initial position
+        self.active=False
+        #self.set_motion(LimbMotionPlan(self))  # set the initial position
         
     def get_servo_nr(self):
         return self.servo_nr

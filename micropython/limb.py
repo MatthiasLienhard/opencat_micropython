@@ -144,6 +144,7 @@ class LimbMotionPlan:
         self.steps_duration=steps_duration
         if len(self.steps)==len(self.steps_duration):
             self.steps.append(self.steps[0]) #make it circular
+            
         if len(self.steps)-1!=len(self.steps_duration):
             raise ValueError('number of steps ({}) does not match number of durations ({})'.format(len(self.steps),len(self.steps_duration)))
         self.position_mode=position_mode

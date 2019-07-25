@@ -129,8 +129,8 @@ class Cat:
         n_pos=len(next(iter(leg_position.values())))
         if n_pos==1:
             iterations=None
-        if iterations is not None:
-            n_pos+=1
+        if iterations is None:
+            n_pos-=1
         if len(t)<n_pos:
             t=t+[t[-1]]*(n_pos-len(t))
         t=[t_s *1000 for t_s in t]
