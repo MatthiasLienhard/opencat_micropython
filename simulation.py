@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 
-from micropython.cat import Cat,MotionPlan
+from micropython.cat import Cat
+
 from micropython.kinematics import TwoLinkArmKinematics as K
 from tkinter import Tk, Canvas, Entry, Frame,StringVar,Label, N, W, E, S
 import tkinter as tk
 from tkinter import ttk
 import math
-from micropython.limb import Limb
+from micropython.limb import Limb, LimbMotionPlan
 from collections import deque
 
 
@@ -28,7 +29,7 @@ class SimulationLimb(Limb):
         self.kinematics=kinematics        
         self.servo_nr=servo_nr
         self.trace=deque(maxlen=20)
-        self.motion=MotionPlan(self, transition_time=0)  # set the initial position
+        self.set_motion(LimbMotionPlan(self))  # set the initial position
         
     def get_servo_nr(self):
         return self.servo_nr
@@ -49,16 +50,16 @@ class SimulationJoint():
     def __init__(self, theta=None, offset=0, invert=False):
         self.theta=theta
         self.offset=offset
-        self.actual_theta=theta+offset #relative to the imaginatory servo (not used)
-        self.invert=invert
+        #self.actual_theta=theta+offset #relative to the imaginatory servo (not used)
+        #self.invert=invert
         self.trace=deque(maxlen=10)
 
        
     def move_to(self,theta=None):
             self.theta=theta
-            self.actual_theta=theta+self.offset 
-            if self.invert:
-                self.actual_theta=180-theta
+            #self.actual_theta=theta+self.offset 
+            #if self.invert:
+            #    self.actual_theta=180-theta
 
    
  
@@ -93,8 +94,9 @@ class SimulationGUI:
         #self.steptime=100 #ms
         self.pt_per_step=10
         self.root = Tk()
+        self.root.geometry()
         self.root.title("robot cat kinematic simulation")
-        self.canvas = Canvas(self.root)
+        self.canvas = Canvas(self.root, width=500, height=300)
         self.canvas.grid(column=0, row=0, sticky=(N, W, E, S))
         self.canvas.bind("<Button-1>", self.xy)
         #self.canvas.bind("<B1-Motion>", self.xy)
@@ -135,16 +137,26 @@ class SimulationGUI:
         cmd=self.repl.get()
         print(cmd)
         try:
-            eval ('self.'+cmd)
-            self.repl_history.append(cmd)
+            ret=eval ('self.'+cmd)
+            if ret is not None:
+                print(ret)
         except Exception as e:
-            print(e)
-        if cmd[:4] =='cat.':
-            self._update()    
+            try:
+                ret=eval (cmd)
+            except Exception as e2:
+                print(e)
+                print(e2)
+        self.repl_history.append(cmd)
+
+        #if cmd[:4] =='cat.':
+        #    self._update()    
+            
+            
         self.current=0        
         self.repl.delete(0, tk.END)
         
         return True
+
 
     def print_thetas(self):
         for name,l in self.cat.limbs.items():
@@ -165,25 +177,36 @@ class SimulationGUI:
             #print('aim:[{},{}]'.format(*aim))
             dist=self.cat.limbs[self.active_leg].get_distance(aim)
             nsteps=(dist*self.scale)//self.pt_per_step
-            th=self.cat.limbs[self.active_leg].get_theta(aim)
-            print('aim:[{},{}] dist={}, nsteps={}, theta=[{},{}]'.format(*aim, dist, nsteps, *th))
-            self.cat.limbs[self.active_leg].motion=MotionPlan(
-                    limb=self.cat.limbs[self.active_leg], 
-                    steps=[aim],
-                    position_mode=True,
-                    transition_time=nsteps*1000//self.cat.freq )
-            print_attributes(self.cat.limbs[self.active_leg].motion)
-            self.root.after(1000//self.cat.freq, self._update)
+            try:
+                th=self.cat.limbs[self.active_leg].get_theta(aim)
+            except TypeError:
+                print('aim:[{},{}] out of reach'.format(*aim))
+            else:
+                print('aim:[{},{}] dist={}, nsteps={}, theta=[{},{}]'.format(*aim, dist, nsteps, *th))
+                leg=self.cat.limbs[self.active_leg]
+                leg.set_motion(LimbMotionPlan(
+                    limb=leg,
+                    steps=[leg.get_position()[1],aim],    
+                    steps_duration=[nsteps*1000//self.cat.freq],
+                    position_mode=True
+                ))
+                print_attributes(self.cat.limbs[self.active_leg].motion)
+            
 
     def _update(self, event=None):
         
-        if self.cat.is_active():
+        #if self.cat.is_active():
+            #print('update')
             #for l in self.cat.limbs.values():
             #    print_attributes(l.motion)
-            self.cat._update(event) 
-            self.draw_legs()
-            self.root.after(1000//self.cat.freq, self._update)
-            return True
+        try:
+            self.cat._update(event)
+        except Exception:
+            print_attributes(self.cat.motion_queue[0])
+            raise
+        self.draw_legs()
+        self.root.after(1000//self.cat.freq, self._update)
+        return True
 
     def get_leg(self, pos):
         for name, offset in self.limb_offset.items():
@@ -199,7 +222,7 @@ class SimulationGUI:
             x,y=[(p+o)*self.scale for p,o in zip(pos_rel, self.limb_offset[self.active_leg])]
             
             self.canvas.create_oval(x-1, y-1, x+1, y+1, width = 0, fill = 'darkgrey')
-        for i in [n for _,n in self.cat._limb_names if 'leg' in n]:
+        for i in [n for n in self.cat.leg_names]:
             color='red' if i == self.active_leg else 'black'
             shoulder=[s*self.scale for s in self.limb_offset[i]]
             knee, foot=self.cat.limbs[i].get_position() #relative to shoulder

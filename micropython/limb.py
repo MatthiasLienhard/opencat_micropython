@@ -1,6 +1,5 @@
 try:
     from pca9685 import Servos
-    import machine
 except ModuleNotFoundError:
     pass
 import math
@@ -8,7 +7,6 @@ try:
     from .kinematics import TwoLinkArmKinematics as K 
 except:
     from kinematics import TwoLinkArmKinematics as K 
-
 try:
     from utime import ticks_ms, ticks_diff
 except ModuleNotFoundError: #make it compatible to python3
@@ -17,20 +15,21 @@ except ModuleNotFoundError: #make it compatible to python3
         return time_ns() // 1000000 
     def ticks_diff(new,old):
         return(new-old)           
+          
 
 def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=None):
     limb_names=['leg_front_left', 'leg_back_left', 'leg_front_right', 'leg_back_right', 'tail', 'head']
     if init_theta is None:
-        init_theta=[[160,-130],[20,130],[160,-130],[20,130],[10],[-40,0]] #sleeping_cat
+        init_theta=[[170,-140],[170,-140],[170,-140],[170,-140],[10],[-40,0]] #sleeping_cat
     if invert is None:
-        invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,0]]
+        invert=[[1,0],[1,0],[0,1],[0,1],[0],[0,0]]
     if offset is None:
-        offset=[[14, 130],[ 11.5, 47], [14, 150], [13, 34],[80],[110,80]] #EMPIRICAL    
+        offset=[[-15,150],[-15,140],[-15,150],[-15,150],[80],[110,80]] #EMPIRICAL    
     if kinematics is None:
         kinematics=[K(invert_th2=i) for i in [False, True, False, True]]+[None, None]
     servos=Servos(i2c) 
     s_nr=[[0,1],[2,3],[4,5],[6,7],[8],[9,10]]
-    limbs={n:Limb( n,servos,  nr, th, o, i,kin) for n, nr, th, o, i, kin in zip(limb_names,s_nr,init_theta, offset, invert, kinematics )}
+    limbs={n:Limb(servos, n, nr, th, o, i,kin) for n, nr, th, o, i, kin in zip(limb_names,s_nr,init_theta, offset, invert, kinematics )}
     return(limbs)
         
 class Limb:
@@ -38,8 +37,32 @@ class Limb:
         self.name=name
         self.joints=[Joint(servos, nr, it, os,iv ) for nr,it,os,iv in zip(servo_nr,  init_theta, offset, invert)]
         self.kinematics=kinematics
-        self.motion=MotionPlan(self, transition_time=0)  # set the initial position
+        self.active=False
+        self.motion_start=None
+        self.set_motion(LimbMotionPlan(self))
+        
     
+    def set_motion(self, motion, t=None):
+        self.motion=motion
+        if t is None:
+            t=ticks_ms()
+        self.motion_start=t
+        self.active=True
+
+    def update_position(self, t=None):
+        if not self.active:
+            return
+        if t is None:
+            t=ticks_ms()
+        delta_t=ticks_diff(t,self.motion_start)
+        if delta_t>self.motion.iter_duration:
+            self.active=False
+            theta=self.motion.end_theta
+        else:
+            theta=self.motion.get_theta(delta_t)
+        self.move_to(theta)
+
+
     def __repr__(self):
         return 'Limb: {} with servos {}'.format(self.name, self.get_servo_nr())
 
@@ -50,9 +73,6 @@ class Limb:
         if pos is not None:
             return self.kinematics.inverse(pos, degrees=True)
         return [j.theta for j in self.joints]
-
-    def calibrate(self,joint_nr=0,delta_theta=5 ):
-        self.joints[joint_nr].offset+=delta_theta
 
 
     def get_position(self, theta=None):
@@ -106,43 +126,33 @@ class Joint:
         self.theta=theta
 
     def get_range(self):
-        if self.invert:
+        if self.invert():
             return 0+self.offset, 180+self.offset #sure???
         else:
             return 0-self.offset, 180-self.offset
         #assuming [0-180]
  
-       
-class MotionPlan: 
-    def __init__(self, limb, transition_time,steps=None, position_mode=False, steps_duration=None,start_time=None, iterations=0, phase=0):
+
+class LimbMotionPlan: 
+    def __init__(self, limb, steps=None, steps_duration=None, phase=0,position_mode=False):
         self.limb=limb
-        if position_mode:  
-            self.init=limb.get_position()[1]
-        else:
-            self.init=limb.get_theta()
         if steps is None:
-            steps=[self.init]
-        if start_time is None:
-            start_time= ticks_ms()
-        #print(steps_duration)
+            steps=[limb.get_position()[1] if position_mode else limb.get_theta()]       
         self.steps=steps
         if steps_duration is None:
             steps_duration=[]
         self.steps_duration=steps_duration
+        if len(self.steps)==len(self.steps_duration):
+            self.steps.append(self.steps[0]) #make it circular
+        if len(self.steps)-1!=len(self.steps_duration):
+            raise ValueError('number of steps ({}) does not match number of durations ({})'.format(len(self.steps),len(self.steps_duration)))
         self.position_mode=position_mode
-        self.transition_time=transition_time
-        self.terminated=False
         self.n_steps=len(steps_duration)
-        self.start_time=start_time
-        self.iterations=iterations
         self.iter_duration=sum(steps_duration)
         self.phase=self.iter_duration*phase
         self.start_pos=self._get_pos_within_iteration(self.phase)
         #compute final theta
-        if self.iterations==0:
-            self.end_theta=self.steps[-1]
-        else:#in iterative moves, start == end
-            self.end_theta=self.start_pos
+        self.end_theta=self._get_pos_within_iteration(self.phase+self.iter_duration)
         if position_mode:
             self.end_theta=self.limb.get_theta(self.end_theta)
         
@@ -158,39 +168,17 @@ class MotionPlan:
         t%=self.iter_duration
         #find the current step
         prev=0
+        step=0
         for i,step in enumerate(self.steps_duration):
             if prev+step>t:
                 break
             prev+=step
-        t-=prev
         #get weighted mean
-        progress=t/step
-        return self.mean(self.steps[i],self.steps[(i+1)%len(self.steps)],progress)
+        progress=(t-prev)/step
+        return self.mean(self.steps[i],self.steps[(i+1)%self.n_steps],progress)
 
     def get_theta(self, t=None):
-        if self.terminated:
-            return(self.end_theta)
-        if t is None:
-            t= ticks_ms()
-        t=ticks_diff(t,self.start_time)
-        if t < self.transition_time:
-            #move towards first position
-            if t>0:
-                progress=t/self.transition_time
-                current_pos=self.mean(self.init,self.start_pos,progress)            
-            else:
-                current_pos=self.init
-        elif self.n_steps>0: #not just one position
-            t-=self.transition_time
-            i=t//self.iter_duration
-            if i<=self.iterations:
-                current_pos=self._get_pos_within_iteration(t+self.phase)
-            else:
-                self.terminated=True
-                return(self.end_theta)
-        else:
-            self.terminated=True
-            return(self.end_theta)
+        current_pos=self._get_pos_within_iteration(t+self.phase)
         if self.position_mode:
             return self.limb.get_theta(current_pos)
         return current_pos
