@@ -2,12 +2,12 @@
 from time import sleep
 try: 
     from machine import Timer
-except ModuleNotFoundError:
+except ImportError:
     class Timer:
         PERIODIC=0
 try:
     from .limb import LimbMotionPlan, ticks_ms
-except ModuleNotFoundError:
+except ValueError: #"cannot perform relative import" raises a value error
     from limb import LimbMotionPlan, ticks_ms
 
 from collections import deque
@@ -18,8 +18,12 @@ class Cat:
         #get the names to define a order (based on servo_nr)
         self._limb_names=sorted([(l.get_servo_nr(), l.name) for l in self.limbs.values()])
         self.freq=25
-        self.motion_queue=deque(maxlen=20)
+        try:
+            self.motion_queue=deque(maxlen=20)
+        except TypeError:
+            self.motion_queue=deque((),20) # strange micropython syntax, no kw allowed
         self.timer= timer
+        self.next_motion=None
         if timer is not None:
             period=1000//freq
             try:
@@ -52,19 +56,17 @@ class Cat:
         return [n for _,n in self._limb_names if 'leg' in n and which in n]
 
     def _update(self,timer=None ):
-        active=self.active_limbs()        
-        if self.motion_queue:
-            next_motion=self.motion_queue[0]
-            if not any (limb in active for limb in next_motion.wait_for):
-                if next_motion.iterations is None:
-                    _=self.motion_queue.popleft()
-                else:
-                    next_motion.iterations-=1
-                    if next_motion.iterations<1:
-                        _=self.motion_queue.popleft()
-                for limb,motion in next_motion.limb_motions.items():
+        active=self.active_limbs() 
+        if self.motion_queue and self.next_motion is None:
+            self.next_motion=self.motion_queue.popleft()
+        if self.next_motion is not None:
+            if not any (limb in active for limb in self.next_motion.wait_for): # apply next motion
+                for limb,motion in self.next_motion.limb_motions.items():
                     self.limbs[limb].set_motion(motion)
-
+                if self.next_motion.iterations is not None:
+                    self.next_motion.iterations-=1
+                if self.next_motion.iterations is None or self.next_motion.iterations<1:
+                    self.next_motion=None
         for limb in self.limbs.values():
             limb.update_position()
         

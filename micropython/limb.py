@@ -1,6 +1,6 @@
 try:
     from pca9685 import Servos
-except ModuleNotFoundError:
+except ImportError:
     pass
 import math
 try:
@@ -9,7 +9,7 @@ except:
     from kinematics import TwoLinkArmKinematics as K 
 try:
     from utime import ticks_ms, ticks_diff
-except ModuleNotFoundError: #make it compatible to python3
+except ImportError: #make it compatible to python3
     from time import time_ns
     def ticks_ms():
         return time_ns() // 1000000 
@@ -22,9 +22,9 @@ def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=No
     if init_theta is None:
         init_theta=[[170,-140],[170,-140],[170,-140],[170,-140],[10],[-40,0]] #sleeping_cat
     if invert is None:
-        invert=[[1,0],[1,0],[0,1],[0,1],[0],[0,0]]
+        invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,0]]
     if offset is None:
-        offset=[[-15,150],[-15,140],[-15,150],[-15,150],[80],[110,80]] #EMPIRICAL    
+        offset=[[15,130],[10,35],[15,150],[15,30],[80],[110,80]] #EMPIRICAL    
     if kinematics is None:
         kinematics=[K(invert_th2=i) for i in [False, True, False, True]]+[None, None]
     servos=Servos(i2c) 
@@ -33,7 +33,7 @@ def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=No
     return(limbs)
         
 class Limb:
-    def __init__(self, name,servos, servo_nr, init_theta, offset, invert,kinematics=None):
+    def __init__(self, servos,name, servo_nr, init_theta, offset, invert,kinematics=None):
         self.name=name
         self.joints=[Joint(servos, nr, it, os,iv ) for nr,it,os,iv in zip(servo_nr,  init_theta, offset, invert)]
         self.kinematics=kinematics
