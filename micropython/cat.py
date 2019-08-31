@@ -13,17 +13,19 @@ except ValueError: #"cannot perform relative import" raises a value error
 from collections import deque
 
 class Cat:
-    def __init__(self, limbs, freq=25, timer=None):
+    def __init__(self, limbs, freq=25, timer=None, mpu=None):
         self.limbs=limbs        
         #get the names to define a order (based on servo_nr)
         self._limb_names=sorted([(l.get_servo_nr(), l.name) for l in self.limbs.values()])
         self.freq=25
+        self.mpu=mpu # this is not used so far
         try:
             self.motion_queue=deque(maxlen=20)
         except TypeError:
             self.motion_queue=deque((),20) # strange micropython syntax, no kw allowed
         self.timer= timer
         self.next_motion=None
+        self.stand()
         if timer is not None:
             period=1000//freq
             try:
@@ -124,14 +126,16 @@ class Cat:
         #print(pos)
         return(pos)
         
-    def stand(self,t=1, iterations=None, **kwargs):  
+    def stand(self,t=1, iterations=0, **kwargs):  
         leg_position=self.leg_position(**kwargs)
+        
         if not isinstance(t,list):
             t=[t]
         n_pos=len(next(iter(leg_position.values())))
         if n_pos==1:
-            iterations=None
-        if iterations is None:
+            iterations=0
+            leg_position={k:[[None]]+v for k,v in leg_position.items()}
+        if iterations ==0:
             n_pos-=1
         if len(t)<n_pos:
             t=t+[t[-1]]*(n_pos-len(t))
@@ -149,7 +153,7 @@ class Cat:
     def walk(self, n_steps=10, gait=0,lift=1, step_size=6, direction=0, t=1, speed=6,**kwargs):  
         #two opposit legs are on the ground
         #speed in cm/sec
-        kwargs.setdefault('ground_pos',2.5)
+        kwargs.setdefault('ground_pos',0)
         leg_position=self.leg_position(**kwargs) #center position
         reverse= (step_size<0 or speed <0)
         step_size=abs(step_size)
@@ -189,14 +193,14 @@ class Cat:
     def set_head(self, pos=[0, 0], t=1):
         self.motion_queue.append(MotionPlan(
                     limbs=[self.limbs['head']],
-                    steps=[None, pos],
-                    steps_duration=[t*1000]))
+                    steps=[[None], pos],
+                    steps_duration=[t*1000], iterations=0))
 
     def set_tail(self, pos=0, t=1):
         self.motion_queue.append(MotionPlan(
                     limbs=[self.limbs['tail']],
-                    steps=[None,[pos]],
-                    steps_duration=[t*1000]))
+                    steps=[[None],[pos]],
+                    steps_duration=[t*1000], iterations=0))
 
     def wag(self, n=3, amplitude=30, freq=1):
         self.motion_queue.append(MotionPlan(
@@ -217,7 +221,7 @@ class Cat:
         self.set_tail(-60)
         
     def sleep(self):
-        self.stand(height=4,ground_pos=2, pitch=1, spread=3)
+        self.stand(height=2.5,spread=4.5)
         self.set_head([-80,-40])
 
     def yes(self, n=3, amplitude=30, freq=1):
@@ -260,6 +264,7 @@ class MotionPlan:
             steps_duration=[steps_duration for _ in limbs]
         if get_levels(steps)==2:
             steps=[steps for _ in limbs]
+        #print('new motion plan {} {} {}'.format(limbs, steps, steps_duration))
         self.limb_motions={l.name:LimbMotionPlan(l,steps=s, steps_duration=d, phase=p, position_mode=position_mode) 
                 for l,s,d,p in zip(limbs, steps, steps_duration, phase)}
 

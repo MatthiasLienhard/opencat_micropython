@@ -137,7 +137,7 @@ class LimbMotionPlan:
     def __init__(self, limb, steps=None, steps_duration=None, phase=0,position_mode=False):
         self.limb=limb
         if steps is None:
-            steps=[limb.get_position()[1] if position_mode else limb.get_theta()]       
+            steps=[[None]]
         self.steps=steps
         if steps_duration is None:
             steps_duration=[]
@@ -151,11 +151,19 @@ class LimbMotionPlan:
         self.n_steps=len(steps_duration)
         self.iter_duration=sum(steps_duration)
         self.phase=self.iter_duration*phase
+        self.initialized=False
+    
+    def initialize(self):
+        if self.steps[0][0] is None:
+            self.steps[0]=self.limb.get_position()[1] if self.position_mode else self.limb.get_theta()
+        
         self.start_pos=self._get_pos_within_iteration(self.phase)
         #compute final theta
         self.end_theta=self._get_pos_within_iteration(self.phase+self.iter_duration)
-        if position_mode:
+        if self.position_mode:
             self.end_theta=self.limb.get_theta(self.end_theta)
+        #print("steps {}, duration {}, start {}, end {}".format(self.steps, self.steps_duration, self.start_pos, self.end_theta))
+        self.initialized=True
         
         
 
@@ -166,7 +174,9 @@ class LimbMotionPlan:
     def _get_pos_within_iteration(self, t):
         if t==0 or self.iter_duration==0:
             return(self.steps[0])
-        t%=self.iter_duration
+        if t == self.iter_duration:
+            return(self.steps[-1])
+        t%= self.iter_duration
         #find the current step
         prev=0
         step=0
@@ -176,9 +186,11 @@ class LimbMotionPlan:
             prev+=step
         #get weighted mean
         progress=(t-prev)/step
-        return self.mean(self.steps[i],self.steps[(i+1)%self.n_steps],progress)
+        return self.mean(self.steps[i],self.steps[(i+1)%len(self.steps)],progress)
 
     def get_theta(self, t=None):
+        if not self.initialized:
+            self.initialize()
         current_pos=self._get_pos_within_iteration(t+self.phase)
         if self.position_mode:
             return self.limb.get_theta(current_pos)
