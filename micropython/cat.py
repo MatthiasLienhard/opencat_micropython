@@ -23,6 +23,8 @@ class Cat:
         self.touch_pin=touch_pin
         self.dist_sensor=dist_sensor
         self.v_bat=v_bat
+        self.autonomous=False
+        self.distances=[None, None, None]
         try:
             self.motion_queue=deque(maxlen=20)
         except TypeError:
@@ -44,16 +46,18 @@ class Cat:
             self.timer.deinit()
 
     def meow(self):
+        print('meow')
         if self.dac is None:
             print('no dac specified')
         else:
             with wave.open('meow.wav') as meow:
                 self.dac.write_timed(meow.readframes(meow.getnframes()), meow.getframerate(), wait=True)
+                #test dac.play_wave
             self.dac.write(0)
     
     def get_vbat(self):
         if self.v_bat:
-            return self.v_bat.read()/4095*3.9*2
+            return self.v_bat.read()/4095*3.9*2 # more or less
 
 
     def set_frequency(self, freq):
@@ -76,23 +80,74 @@ class Cat:
 
     def _update(self,timer=None ):
         active=self.active_limbs() 
+        if self.autonomous:
+            current_dir=self.get_head_direction()   
         if self.motion_queue and self.next_motion is None:
             self.next_motion=self.motion_queue.popleft()
         if self.next_motion is not None:
             if not any (limb in active for limb in self.next_motion.wait_for): # apply next motion
-                for limb,motion in self.next_motion.limb_motions.items():
-                    self.limbs[limb].set_motion(motion)
-                if self.next_motion.iterations is not None:
-                    self.next_motion.iterations-=1
-                if self.next_motion.iterations is None or self.next_motion.iterations<1:
-                    self.next_motion=None
+                if self.autonomous:
+                    if any([d>=200 for d in self.distances]): #ensure we are not walking backwards
+                        self.distances[current_dir+1]=self.dist()
+                        if self.distances[current_dir+1]<1000: #obstical in 1m -> check directions (todo if not walking backwards)
+                            self.next_motion=None
+                            self.distances=[self.distances[i] if i ==current_dir+1 else None for i in range(3)]
+                if self.next_motion is not None:
+                    for limb,motion in self.next_motion.limb_motions.items():
+                        self.limbs[limb].set_motion(motion)
+                    if self.next_motion.iterations is not None:
+                        self.next_motion.iterations-=1
+                    if self.next_motion.iterations is None or self.next_motion.iterations<1:
+                        self.next_motion=None
+        elif self.autonomous: #next_motion is None
+            if any ([d is None for d in self.distances]):
+                self.check_direction()
+            elif all([d<200 for d in self.distances]):
+                self.walk(speed=-5, n_steps=4)
+            else:
+                if current_dir==0:
+                    self.set_head([0,0])
+                else:
+                    self.set_head([-30, 50*current_dir])
+                self.walk(direction=current_dir*5, n_steps=20)
+                    
+        
+        
         for limb in self.limbs.values():
             limb.update_position()
         
         if self.touch_pin and self.touch_pin.read()<500:
+            #toggle autonomous mode
             self.meow()
+            
+            if self.autonomous:
+                self.autonomous=False
+                self.next_motion=None
+                self.sleep()
+            else:
+                self.autonomous=True
+                self.distances=[None, None, None]
+                self.next_motion=None
+                self.stand()
+
+
+    def get_head_direction(self):
+        th=self.limbs['head'].get_theta()[1]
+        if th<0:
+            return -1
+        elif th>0:
+            return 1
+        return 0
         
         
+
+    def check_direction(self):
+        if self.distances[0] is None:
+            self.set_head([-30,-50])
+        if self.distances[2] is None:
+            self.set_head([-30,50])
+        self.set_head([0,0])
+        self.set_head([0,0], t=0) #just to have one more motion in the queue
 
     def get_limb_thetas(self,ref_time=None):
         
@@ -161,7 +216,7 @@ class Cat:
             t=t+[t[-1]]*(n_pos-len(t))
         t=[t_s *1000 for t_s in t]
         
-        now=ticks_ms()  
+        #now=ticks_ms()  
         legs=list(leg_position)
         self.motion_queue.append(MotionPlan(
                 limbs=[self.limbs[l] for l in legs],
@@ -208,16 +263,10 @@ class Cat:
             position_mode=True,
             iterations=n_steps))
         
-    def dist_at(self,pos=[0,0]):
-        self.set_head(pos)
-        [sleep(.1)for _ in range(10)]
-        return self.dist() #todo: use callbacks
-
     def dist(self):
-        if self.dist_sensor:
-            dist=self.dist_sensor.distance_mm()
-            if dist==-1:
-                dist=99999
+        dist=self.dist_sensor.distance_mm()
+        if dist==-1:
+            dist=99999
         return dist
 
 
@@ -282,40 +331,6 @@ class Cat:
     
     def pushups(self, iterations=5, t=1):
         self.stand(pitch=[-3,3], height=[5,7],iterations=iterations, t=t)
-
-    def autonomous(self):
-        forward=True
-        try:
-            while True:
-                kw=dict()
-                dist=self.dist_at([0,0])
-                if dist < 1000: #at least a meter
-                    dist_left=self.dist_at([-30,50])
-                    dist_right=self.dist_at([-30,-50])
-                    if dist<200 and dist_left <200 and dist_right<200:
-                        kw={'direction':0,'speed':-5,'gait':1}
-                        forward=False
-                    else:
-                        forward=True
-                        if dist_left>dist and dist_left>dist_right:
-                            kw['direction']=4
-                            self.set_head([-30,50])
-                        elif dist_right>dist:
-                            kw['direction']=-4
-                        else:
-                            self.set_head([0,0])
-                self.walk( n_steps=999,**kw)     
-                print(kw)           
-                while True:
-                    sleep(.1)
-                    dist=self.dist()
-                    print(dist)
-                    if forward == (dist<500) :
-                        self.next_motion.iterations=0
-                        break
-        except Exception as e:
-            print(e)
-            self.next_motion.iterations=0
 
 
 
