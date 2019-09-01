@@ -1,0 +1,5 @@
+**/credentials.txt
+**/.*
+__pycache__
+pymakr.conf
+!.gitignore
