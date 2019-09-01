@@ -56,6 +56,7 @@ class Limb:
             t=ticks_ms()
         delta_t=ticks_diff(t,self.motion_start)
         if delta_t>self.motion.iter_duration:
+            #todo: call callback????
             self.active=False
             theta=self.motion.end_theta
         else:
@@ -134,8 +135,9 @@ class Joint:
  
 
 class LimbMotionPlan: 
-    def __init__(self, limb, steps=None, steps_duration=None, phase=0,position_mode=False):
+    def __init__(self, limb, steps=None, steps_duration=None, phase=0,position_mode=False, callback=None):
         self.limb=limb
+        self.callback=callback
         if steps is None:
             steps=[[None]]
         self.steps=steps

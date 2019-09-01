@@ -1,4 +1,4 @@
-
+import wave
 from time import sleep
 try: 
     from machine import Timer
@@ -13,12 +13,16 @@ except ValueError: #"cannot perform relative import" raises a value error
 from collections import deque
 
 class Cat:
-    def __init__(self, limbs, freq=25, timer=None, mpu=None):
+    def __init__(self, limbs, freq=25, timer=None, mpu=None, dac=None, touch_pin=None, v_bat=None, dist_sensor=None):
         self.limbs=limbs        
         #get the names to define a order (based on servo_nr)
         self._limb_names=sorted([(l.get_servo_nr(), l.name) for l in self.limbs.values()])
         self.freq=25
         self.mpu=mpu # this is not used so far
+        self.dac=dac
+        self.touch_pin=touch_pin
+        self.dist_sensor=dist_sensor
+        self.v_bat=v_bat
         try:
             self.motion_queue=deque(maxlen=20)
         except TypeError:
@@ -38,7 +42,20 @@ class Cat:
     def __del__(self):
         if self.timer is not None:
             self.timer.deinit()
+
+    def meow(self):
+        if self.dac is None:
+            print('no dac specified')
+        else:
+            with wave.open('meow.wav') as meow:
+                self.dac.write_timed(meow.readframes(meow.getnframes()), meow.getframerate(), wait=True)
+            self.dac.write(0)
     
+    def get_vbat(self):
+        if self.v_bat:
+            return self.v_bat.read()/4095*3.9*2
+
+
     def set_frequency(self, freq):
         self.freq=freq
         if self.timer is not None:
@@ -71,6 +88,9 @@ class Cat:
                     self.next_motion=None
         for limb in self.limbs.values():
             limb.update_position()
+        
+        if self.touch_pin and self.touch_pin.read()<500:
+            self.meow()
         
         
 
@@ -188,6 +208,17 @@ class Cat:
             position_mode=True,
             iterations=n_steps))
         
+    def dist_at(self,pos=[0,0]):
+        self.set_head(pos)
+        [sleep(.1)for _ in range(10)]
+        return self.dist() #todo: use callbacks
+
+    def dist(self):
+        if self.dist_sensor:
+            dist=self.dist_sensor.distance_mm()
+            if dist==-1:
+                dist=99999
+        return dist
 
 
     def set_head(self, pos=[0, 0], t=1):
@@ -252,8 +283,45 @@ class Cat:
     def pushups(self, iterations=5, t=1):
         self.stand(pitch=[-3,3], height=[5,7],iterations=iterations, t=t)
 
+    def autonomous(self):
+        forward=True
+        try:
+            while True:
+                kw=dict()
+                dist=self.dist_at([0,0])
+                if dist < 1000: #at least a meter
+                    dist_left=self.dist_at([-30,50])
+                    dist_right=self.dist_at([-30,-50])
+                    if dist<200 and dist_left <200 and dist_right<200:
+                        kw={'direction':0,'speed':-5,'gait':1}
+                        forward=False
+                    else:
+                        forward=True
+                        if dist_left>dist and dist_left>dist_right:
+                            kw['direction']=4
+                            self.set_head([-30,50])
+                        elif dist_right>dist:
+                            kw['direction']=-4
+                        else:
+                            self.set_head([0,0])
+                self.walk( n_steps=999,**kw)     
+                print(kw)           
+                while True:
+                    sleep(.1)
+                    dist=self.dist()
+                    print(dist)
+                    if forward == (dist<500) :
+                        self.next_motion.iterations=0
+                        break
+        except Exception as e:
+            print(e)
+            self.next_motion.iterations=0
+
+
+
 class MotionPlan:
-    def __init__(self, limbs, steps, steps_duration, phase=0,iterations=1,  position_mode=False,wait_for=None):
+    def __init__(self, limbs, steps, steps_duration, phase=0,iterations=1,  position_mode=False,wait_for=None, callback=None):
+        self.callback=callback
         if wait_for is None:
             wait_for=[l.name for l in limbs]
         self.wait_for=wait_for
