@@ -41,10 +41,3 @@ cat.stand(height=7,t=2)
 cat.wag(6, freq=2)
 cat.yes(3)
 cat.meow()
-for _ in range(10):
-    sleep(1)
-    if t.read()<500:
-        cat.sleep()
-        break
-else:
-    cat.autonomous()

@@ -78,6 +78,7 @@ __all__ = ["open", "openfp", "Error"]
 class Error(Exception):
     pass
 
+
 WAVE_FORMAT_PCM = 0x0001
 
 _array_fmts = None, 'b', 'h', None, 'i'
@@ -90,6 +91,14 @@ from collections import namedtuple
 
 _wave_params = namedtuple('_wave_params',
                      'nchannels sampwidth framerate nframes comptype compname')
+
+def volume(data, vol, append=[]):
+    data_list=[int((val-128)*vol+128) for val in list(data)]+append
+    #data_list=[0 if val<0 else 255 if val > 255 else val for val in data_list]
+    return bytes(data_list)
+
+
+
 
 class Wave_read:
     """Variables used in this class:

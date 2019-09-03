@@ -22,9 +22,9 @@ def get_cat_limbs(i2c , init_theta=None, offset=None, invert=None, kinematics=No
     if init_theta is None:
         init_theta=[[170,-140],[170,-140],[170,-140],[170,-140],[10],[-40,0]] #sleeping_cat
     if invert is None:
-        invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,0]]
+        invert=[[0,1],[0,1],[1,0],[1,0],[0],[0,1]]
     if offset is None:
-        offset=[[15,130],[10,35],[15,150],[15,30],[80],[110,80]] #EMPIRICAL    
+        offset=[[15,130],[10,35],[15,150],[15,30],[80],[100,95]] #EMPIRICAL    
     if kinematics is None:
         kinematics=[K(invert_th2=i) for i in [False, True, False, True]]+[None, None]
     servos=Servos(i2c) 

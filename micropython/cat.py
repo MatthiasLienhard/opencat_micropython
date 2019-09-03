@@ -20,6 +20,13 @@ class Cat:
         self.freq=25
         self.mpu=mpu # this is not used so far
         self.dac=dac
+        if dac is not None:
+            with wave.open('meow.wav') as meow:
+                volume=.1
+                meow._convert=lambda data : wave.volume(data, volume, append=[0]*2) #performance is low ->precompute
+                self.meow_data=meow.readframes(meow.getnframes())
+                self.meow_framerate=meow.getframerate()
+
         self.touch_pin=touch_pin
         self.dist_sensor=dist_sensor
         self.v_bat=v_bat
@@ -45,15 +52,19 @@ class Cat:
         if self.timer is not None:
             self.timer.deinit()
 
-    def meow(self):
+    def meow(self, volume=.1):
         print('meow')
         if self.dac is None:
             print('no dac specified')
         else:
             with wave.open('meow.wav') as meow:
+                #meow._convert=lambda data : wave.volume(data, volume) #performance is low
                 self.dac.write_timed(meow.readframes(meow.getnframes()), meow.getframerate(), wait=True)
-                #test dac.play_wave
-            self.dac.write(0)
+                #dac.wavplay
+            self.dac.write(0) # otherwise there is noise
+            self.dac.stopwave() #performance?
+            #self.dac.write_timed(self.meow_data,self.meow_framerate)
+
     
     def get_vbat(self):
         if self.v_bat:
@@ -80,36 +91,47 @@ class Cat:
 
     def _update(self,timer=None ):
         active=self.active_limbs() 
-        if self.autonomous:
-            current_dir=self.get_head_direction()   
         if self.motion_queue and self.next_motion is None:
             self.next_motion=self.motion_queue.popleft()
         if self.next_motion is not None:
             if not any (limb in active for limb in self.next_motion.wait_for): # apply next motion
                 if self.autonomous:
-                    if any([d>=200 for d in self.distances]): #ensure we are not walking backwards
+                    current_dir=self.get_head_direction()   
+                    n_dir=sum([d is not None for d in self.distances])
+                    if n_dir<3:
+                        if self.distances[current_dir+1] is not None:
+                            self.next_motion.iterations = None
                         self.distances[current_dir+1]=self.dist()
-                        if self.distances[current_dir+1]<1000: #obstical in 1m -> check directions (todo if not walking backwards)
-                            self.next_motion=None
+                    elif any([d>300 for d in self.distances]): #ensure we are not walking backwards
+                        self.distances[current_dir+1]=self.dist()                        
+                        if self.distances[current_dir+1]<700: #obstical in 70cm -> check directions (todo if not walking backwards)
+                            #self.next_motion=None
+                            self.next_motion.iterations=1
                             self.distances=[self.distances[i] if i ==current_dir+1 else None for i in range(3)]
-                if self.next_motion is not None:
-                    for limb,motion in self.next_motion.limb_motions.items():
-                        self.limbs[limb].set_motion(motion)
-                    if self.next_motion.iterations is not None:
-                        self.next_motion.iterations-=1
-                    if self.next_motion.iterations is None or self.next_motion.iterations<1:
-                        self.next_motion=None
+                    print(self.distances)
+                
+                for limb,motion in self.next_motion.limb_motions.items():
+                    self.limbs[limb].set_motion(motion)
+                if self.next_motion.iterations is not None:
+                    self.next_motion.iterations-=1
+                if self.next_motion.iterations is None or self.next_motion.iterations<1:
+                    self.next_motion=None
         elif self.autonomous: #next_motion is None
+            self.distances[self.get_head_direction()+1]=self.dist()
             if any ([d is None for d in self.distances]):
+                print('check distances')
                 self.check_direction()
-            elif all([d<200 for d in self.distances]):
-                self.walk(speed=-5, n_steps=4)
+            elif all([d<300 for d in self.distances]):
+                print('backwards')
+                self.walk(step_size=-4, ground_pos=2, n_steps=4)
             else:
-                if current_dir==0:
+                max_dist=self.distances.index(max(self.distances))-1
+                if max_dist==0:
                     self.set_head([0,0])
                 else:
-                    self.set_head([-30, 50*current_dir])
-                self.walk(direction=current_dir*5, n_steps=20)
+                    self.set_head([-20, 50*max_dist])
+                print(['left', 'straight', 'right'][max_dist+1])
+                self.walk(direction=max_dist*3, step_size=5, n_steps=20, speed=12)
                     
         
         
@@ -143,11 +165,11 @@ class Cat:
 
     def check_direction(self):
         if self.distances[0] is None:
-            self.set_head([-30,-50])
+            self.set_head([-20,-50])
         if self.distances[2] is None:
-            self.set_head([-30,50])
+            self.set_head([-20,50])
         self.set_head([0,0])
-        self.set_head([0,0], t=0) #just to have one more motion in the queue
+        #self.set_head([0,0], t=0) #just to have one more motion in the queue
 
     def get_limb_thetas(self,ref_time=None):
         
@@ -245,9 +267,9 @@ class Cat:
             phase=[p/4 for p in [0,2,1,3]]
         step_size={l:step_size for l in leg_position}
         for l in step_size:
-            if direction < 0 and 'left' in l:
+            if direction > 0 and 'left' in l:
                 step_size[l]+=direction #shorten left steps
-            elif direction > 0 and 'right' in l:
+            elif direction < 0 and 'right' in l:
                 step_size[l]-=direction #shorten right steps
             if reverse:
                 step_size[l]= -step_size[l]
