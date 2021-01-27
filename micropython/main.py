@@ -23,6 +23,7 @@ feedback.atten(ADC.ATTN_11DB)
 feedback.read()/4095
 
 vbat= ADC(35)
+
 vbat.atten(ADC.ATTN_11DB)
 print("battery is at {} Volts".format(vbat.read()/4095*3.9*2))
 
@@ -41,3 +42,20 @@ cat.stand(height=7,t=2)
 cat.wag(6, freq=2)
 cat.yes(3)
 cat.meow()
+
+
+#calibration
+x,y,z=0,0,0
+n=10
+for i in range(n):
+    sense=cat.mpu.get_values()
+    x+=sense['AcX']
+    y+=sense['AcY']
+    z+=sense['AcZ']
+    time.sleep(.2)
+
+x/=n
+y/=n
+z/=n
+
+cat.keep_level()

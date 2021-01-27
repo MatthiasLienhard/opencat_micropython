@@ -1,0 +1,55 @@
+from machine import UART
+import time
+uart = UART(1, tx=17, rx=16, baudrate=115200)
+uart.flush()
+uart.any()
+
+return=uart.read()
+uart.write(b'\xAB\xBA\x00\x10\x00\x10')
+uart.write(b'\xAB\xBA\x00\x15\x00\x15')
+
+current_id=''
+
+while True:
+    uart.write(b'\xAB\xBA\x00\x10\x00\x10')
+    resp=bytearray(uart.read())[4:-2]
+    resp=' '.join('{:02x}'.format(x) for x in resp)
+    if current_id and not resp:
+        print('card "{}" removed'.format(current_id))
+    elif resp != current_id:
+        print('new card "{}"'.format(resp))
+    current_id=resp
+    time.sleep(.2)
+
+
+# 1>. Protocol Header: send (0xAB 0xBA)
+# 2>. Return: (0xCD 0xDC)
+# 3>. Address: default 0x00
+# 
+# 4>. Command:
+# Send:
+#    1). 0x10 read UID number
+#    2). 0x11 write UID number (4 bytes), use default password ffffffffffff
+#   3). 0x12 read specified sector
+#    4). 0x13 write specified sector
+#    5). 0x14 modify the password of group A or group B
+#    6). 0x15 read ID number
+#   7). 0x16 write T5577 number
+#    8). 0x17 read all sector data (M1-1K card)
+# Return:
+#   1).0x81 return operation succeeded
+#    2).0x80 return operation failed
+# 
+# 5>. Data Length: means following data length; if it’s 0, then the following data will not occur.
+# 
+# 6>. Data: read and written data
+# Sending Data:
+   1). Read Specified Sector: the first byte of the data represents sector; the second byte means the certain block of the sector; the third byte means A or B group password (0x0A/0x0B);
+    then it comes with password of 6 bytes.
+   2). Write Specified Sector: the first byte of the data represents sector; the second byte means the certain block of the sector; the third byte means A or B group password (0x0A/0x0B);
+    then it comes with password of 6 bytes and block data of 16 bytes.
+   3). Modify Password: the first byte means the certain sector; the second byte means A or B group password (0x0A/0x0B); then it comes with old password of 6 byte and new password.
+# Receiving Data:
+#    Read specified sector return data format, the first byte is sector; the second byte is the certain block of sector; then it comes with block data of 16 bytes.
+# 
+# 7>. XOR check: result of other bytes check except protocol header.

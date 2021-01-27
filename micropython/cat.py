@@ -65,6 +65,20 @@ class Cat:
             self.dac.stopwave() #performance?
             #self.dac.write_timed(self.meow_data,self.meow_framerate)
 
+    def keep_level(self, t=.3, p=1/5000, x=0,y=0, height=6):
+        position={'roll':0,'pitch':0, 'height':height}
+        while True:
+            sense=self.mpu.get_values()
+            print("X="+str((sense['AcX']-x)*p)+"\nY="+str((sense['AcY']-y)/5000))
+            position['pitch']+=(sense['AcX']-x)/5000
+            position['roll']-=(sense['AcY']-y)/5000
+            print(position)
+            if abs(position['pitch']) + abs(position['roll'])>5:
+                self.stand()
+                break
+            self.stand(**position, t=t)
+            while self.is_active():
+                pass
     
     def get_vbat(self):
         if self.v_bat:
@@ -104,7 +118,7 @@ class Cat:
                         self.distances[current_dir+1]=self.dist()
                     elif any([d>300 for d in self.distances]): #ensure we are not walking backwards
                         self.distances[current_dir+1]=self.dist()                        
-                        if self.distances[current_dir+1]<700: #obstical in 70cm -> check directions (todo if not walking backwards)
+                        if self.distances[current_dir+1]<700: #obstical in 70cm -> check directions (if not walking backwards)
                             #self.next_motion=None
                             self.next_motion.iterations=1
                             self.distances=[self.distances[i] if i ==current_dir+1 else None for i in range(3)]
@@ -131,7 +145,7 @@ class Cat:
                 else:
                     self.set_head([-20, 50*max_dist])
                 print(['left', 'straight', 'right'][max_dist+1])
-                self.walk(direction=max_dist*3, step_size=5, n_steps=20, speed=12)
+                self.walk(direction=max_dist*3, step_size=5, n_steps=20, speed=8)
                     
         
         
@@ -287,8 +301,8 @@ class Cat:
         
     def dist(self):
         dist=self.dist_sensor.distance_mm()
-        if dist==-1:
-            dist=99999
+        if dist == -1:
+            dist=None
         return dist
 
 
@@ -345,8 +359,8 @@ class Cat:
     def sit2(self):
         self.set_tail() 
         self.set_head()
-        self.stand(1,ground_pos=1, height=7 ,pitch=-2, spread=-3)                                                                                         
-        sleep(1)
+        self.stand(1,ground_pos=1, height=7 ,pitch=-2, spread=-3)    
+        self.stand(2,ground_pos=1, height=7 ,pitch=-2, spread=-3) #wait
         self.stand(.1,ground_pos=2.5, height=7.7 ,pitch=2.5, spread=-4) 
         self.set_tail(-80,t=.1)                                                                                        
         self.set_head([-50,0], t=.1) 

@@ -58,7 +58,10 @@ class Limb:
         if delta_t>self.motion.iter_duration:
             #todo: call callback????
             self.active=False
-            theta=self.motion.end_theta
+            try:
+                theta=self.motion.end_theta
+            except AttributeError:
+                theta=self.motion.get_theta(delta_t)             
         else:
             theta=self.motion.get_theta(delta_t)
         self.move_to(theta)
