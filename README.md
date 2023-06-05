@@ -1,5 +1,5 @@
 [![Licence: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/MatthiasLienhard/opencat_micropython/blob/master/LICENSE.txt)
-<img align="right" src="opencat_small.png" width="512"  />
+<img align="right" src="opencat_small.jpg" width="512"  />
 
 # opencat_micropython
 micropython implementation for esp32 of the opencat
@@ -49,7 +49,7 @@ Servo ids: FLS, FLK, BLS, BLK, FRS, FRK, BRS, BRK, T, HY, HP
 - some simple gestures (sleep, eat, nod, shake haead, wag)
 
 ## Simulator:
-<img align="right" src="opencat_sim.gif.png" width="300"  />
+<img align="right" src="opencat_sim.gif.gif" width="300"  />
 
 - graphical simulator that runs the same code as the robot
 - text filed to run repl like commadns (e.g. "cat.walk()")
