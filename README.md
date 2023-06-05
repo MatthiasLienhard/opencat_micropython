@@ -49,7 +49,7 @@ Servo ids: FLS, FLK, BLS, BLK, FRS, FRK, BRS, BRK, T, HY, HP
 - some simple gestures (sleep, eat, nod, shake haead, wag)
 
 ## Simulator:
-<img align="right" src="opencat_sim.gif.gif" width="300"  />
+<img align="right" src="opencat_sim.gif" width="300"  />
 
 - graphical simulator that runs the same code as the robot
 - text filed to run repl like commadns (e.g. "cat.walk()")
